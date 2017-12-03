@@ -44,16 +44,46 @@ storage.initSync({
     ttl : false
 });
 function haveError(object) {
-	object.step = 0;
+	object.step = 1;
 	let response;
 	response = {"text": 'Bạn nhập không đúng định dạng. Xin mời gọi cơm từ đầu :('}
 	callSendAPI(senderId, response);	
 }
 function quit(object) {
-	object.step = 0;
+	object.step = 1;
 	let response;
 	response = {"text": 'Bạn sẽ gọi cơm lại từ đầu'}
 	callSendAPI(senderId, response);	
+}
+function degreesToRadians(degrees) {
+  return degrees * Math.PI / 180;
+}
+
+function distanceInKmBetweenEarthCoordinates(lat1, lon1, lat2, lon2) {
+  var earthRadiusKm = 6371;
+
+  var dLat = degreesToRadians(lat2-lat1);
+  var dLon = degreesToRadians(lon2-lon1);
+
+  lat1 = degreesToRadians(lat1);
+  lat2 = degreesToRadians(lat2);
+
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+          Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2); 
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return earthRadiusKm * c;
+}
+function timstore(lat1, lon1) {
+	ans = 0;
+	mi = 1234567890;
+	var stores = getAllStores();
+	for (var i = 0; i < stores.length; i++) {
+		tmp = distanceInKmBetweenEarthCoordinates(lat1, lon1, stores[i].diachiX, stores[i].diachiY);
+		if (tmp < mi) {
+			ans = i;
+		}
+	}
+	return ans;
 }
 // CSDL Cua hang
 //////////////////////////////////////////////////////////////////////////////////////
@@ -74,13 +104,14 @@ function searchStore(storeId) {
 	}
 	return res;
 }
-function addStore(senderId, storeMon) {
+function addStore(storeId, storeDiachiX, storeDiachiY) {
 	var stores = getAllStores();
 	stores.push({
 		id: senderId,
-		mon: storeMon
+		diachix: storeDiachiX,
+		diachiy: storeDiachiY
 	});
-	storage.setItemSync('senders', senders);
+	storage.setItemSync('stores', stores);
 }
 ///////////////////////////////////////////////////////////////////////////////////////
 /* CSDL Khách hàng */
@@ -99,6 +130,7 @@ function showKhach() {
 		console.log(khach.loai);
 		console.log(khach.diachiX);
 		console.log(khach.diachiY);
+		console.log(khach.diachi);
 	});
 }
 /*
@@ -111,12 +143,13 @@ function editSender(i, s) {
 	storage.setItemSync('khachs', khachs);
 }
 */
-function addKhach(khachId, khachTen, khachSdt, khachSoluong, khachLoai, khachDiachiX, khachDiachiY) {
+function addKhach(khachId, khachTen, khachSdt, khachSoluong, khachLoai, khachDiachi, khachDiachiX, khachDiachiY) {
 	var khachs = getAllKhachs();
 	khachs.push({
 		id: khachId,
 		ten: khachTen,
 		sdt: khachSdt,
+		diachi : khachDiachi,
 		diachiX: khachDiachiX,
 		diachiY: khachDiachiY,
 		soluong: khachSoluong,
@@ -129,7 +162,7 @@ function searchKhach(khachId) {
 	var khachs = getAllKhachs();
 	var res = -1;
 	for (var i = 0; i < khachs.length; i++) {
-		console.log("Sender: " + khachs[i].id + '(' + khachs[i].step + ')');
+		console.log("Khach: " + khachs[i].id + '(' + khachs[i].step + ')');
 		if (khachs[i].id === khachId) {
 			res = i;
 			break;
@@ -221,6 +254,7 @@ function editSender(i, step) {
 }
 */
 
+
 function callSendAPI(senderId, response) {
 	let request_body = {
 		"recipient": {
@@ -247,7 +281,6 @@ function helloCheck(text) {
 
 function handleMessage(senderId, received_message) {
 	let response;
-	
 	if (received_message.text) {
 		var text = received_message.text;
 		if (helloCheck(text)) 
@@ -266,6 +299,7 @@ function handleMessage1(senderId, received_message) {
 }
 function handleMessage2(senderId, received_message) {
 	addKhach(senderId, received_message.text);
+	//console.log(received_message.text);
 	let response;
 	response = {"text": 'Bạn muốn mua bao nhiêu xuất cơm'}
 	callSendAPI(senderId, response);	
@@ -275,9 +309,10 @@ function handleMessage3(senderId, received_message) {
 	var khachs = getAllSenders();
 	khachs[stt].soluong =  received_message.text;
 	storage.setItemSync('khachs', khachs);
+	//console.log(khachs[stt].soluong);
 	let response;
 	response = {
-		"text": 'Ban muon mua loai bao nhieu tien?',
+		"text": 'Bạn chọn xuất cơm bao nhiêu tiền?',
 		"quick_replies": [
 		{
 			"content_type": "text",
@@ -296,10 +331,16 @@ function handleMessage3(senderId, received_message) {
 function handleMessage4(senderId, received_message) {
 	stt = searchKhach(senderId);
 	var khachs = getAllSenders();
-	khachs[stt].loai =  received_message.quick_reply.payload;
-	storage.setItemSync('khachs', khachs);
+	try {
+		khachs[stt].loai =  received_message.quick_reply.payload;
+		storage.setItemSync('khachs', khachs);
+	}
+	catch (error) {
+		khachs[stt].loai = 15;
+		storage.setItemSync('khachs', khachs);
+	}
 	let response;
-	response = {"text": 'Sdt: '}
+	response = {"text": 'Số điện thoại của bạn là gì? '}
 	callSendAPI(senderId, response);	
 }
 function handleMessage5(senderId, received_message) {
@@ -319,16 +360,24 @@ function handleMessage5(senderId, received_message) {
 }
 function handleMessage6(senderId, received_message) {
 	stt = searchKhach(senderId);
+	//console.log(received_message.attachments[0].url);
+	var khachs = getAllKhachs();
 	try {
-		var khachs = getAllKhachs();
 		khachs[stt].diachiX = received_message.attachments.payload.coordinates.lat;
 		khachs[stt].diachiY = received_message.attachments.payload.coordinates.long;
 	}
 	catch (error)
         {
+			khachs[stt].diachi = received_message.message.text;
+			khachs[stt].diachiX = -1;
+			khachs[stt].diachiY = -1;
             console.log(error.name + ':' + error.message);
-			alert(error);
         }
+	storage.setItemSync('khachs', khachs);
+	if (khachs[stt].diachiX !== -1) {
+		storegannhat = timstore(khachs[stt].diachiX, khachs[stt].diachiY);
+		// SEND CHO CUA HANG GAN NHAT
+	}
 	storage.setItemSync('khachs', khachs);
 	let response = {"text": 'Đặt hàng thành công !'}
 	callSendAPI(senderId, response);
@@ -341,17 +390,27 @@ function handleMessage6(senderId, received_message) {
 // ban muon mua loai bao nhieu tien?
 // so dien thoai cua ban la gi?
 // cho minh xin dia chi cua ban?
-function notQuit(message) {
-	text = message.message.text;
-	if (text === 'quit' || text === 'Quit' || text === 'QUIT') return 0; else return 1;
+
+function isQuit(message) {
+	text = message.text;
+	if (text === 'quit' || text === 'Quit' || text === 'QUIT') return 1; else return 0;
+}
+function checkQuit(senderId, received_message) {
+			if (isQuit(received_message)===1) {
+				editSender(senderId, 1);  	
+				let response;
+				response = {"text": 'Bạn sẽ gọi cơm lại từ đầu'}
+				callSendAPI(senderId, response);	
+			}
 }
 app.post('/webhook', function(req, res) {
 	var entries = req.body.entry;
 	for (var entry of entries) {
 		var messaging = entry.messaging;
-		for (var message of messaging) {
+		for (var message of messaging) 
+		if (searchStore(message.sender.id) === -1)
+		{
 			var senderId = message.sender.id;
-			if (senderId)
 			var senderStep = getStep(senderId);
 			//console.log(senderId);
 			//console.log(senderStep);
@@ -362,38 +421,48 @@ app.post('/webhook', function(req, res) {
 				//console.log('chua co trong csdl');
 			}
 			// neu da co
-			if (!notQuit(message)) {editSender(senderId, 1); console.log("quit");}
 			if (message.message) {
-				switch (senderStep) {
-					//case 0 : {
-					//	handleMessage(senderId, message.message);
-					//	break;
-					//}
+				// bat error
+				//try {
+					switch (senderStep) {
 					case 1 : {
 						handleMessage1(senderId, message.message);
+						checkQuit(senderId, message.message);
 						break;
 					}
 					case 2 : {
 						handleMessage2(senderId, message.message);
+						checkQuit(senderId, message.message);
 						break;
 					}
 					case 3 : {
 						handleMessage3(senderId, message.message);
+						checkQuit(senderId, message.message);
 						break;
 					}
 					case 4 : {
 						handleMessage4(senderId, message.message);
+						checkQuit(senderId, message.message);
 						break;
 					}
 					case 5 : {
 						handleMessage5(senderId, message.message);
+						checkQuit(senderId, message.message);
 						break;
 					}
 					case 6 : {
-						handleMessage6(senderId, message.message);
+						handleMessage6(senderId, message);
 						break;
 					}
-				}
+					}
+					//catch (error) {
+					//	editSender(senderId, 1);  	
+					//	let response;
+					//	response = {"text": 'Bạn sẽ gọi cơm lại từ đầu'}
+					//	callSendAPI(senderId, response);	
+					//    console.log(error.name + ':' + error.message);
+					//}
+				//}
 				if (senderStep <= 5) editSender(senderId, senderStep+1); else editSender(senderId, 1);
 			}
 			//showSenders();
@@ -402,6 +471,27 @@ app.post('/webhook', function(req, res) {
 			//	handleMessage(senderId, message.message);	
 			//}
 		}
+		// khi cua hang nhan tin
+		else {
+				tmp = searchStore(message.sender.id);
+				var stores = getAllStores();
+				if (stores[tmp].step === 1) {
+				var response = {
+				"text": "Hãy cho chúng tôi địa chỉ của bạn",
+				"quick_replies":[
+				{
+					"content_type":"location"
+				}
+				]
+				}
+				callSendAPI(senderId, response);
+				}
+				else {
+					received_message = message.message;
+					stores[stt].diachiX = received_message.attachments.payload.coordinates.lat;
+					stores[stt].diachiY = received_message.attachments.payload.coordinates.long;	
+				}
+			}
 	}
 	res.status(200).send("OK");
 });
