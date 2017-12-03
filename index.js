@@ -104,12 +104,13 @@ function searchStore(storeId) {
 	}
 	return res;
 }
-function addStore(storeId, storeDiachiX, storeDiachiY) {
+function addStore(storeId, storeDiachiX, storeDiachiY, storeStep) {
 	var stores = getAllStores();
 	stores.push({
-		id: senderId,
+		id: storeId,
 		diachix: storeDiachiX,
-		diachiy: storeDiachiY
+		diachiy: storeDiachiY,
+		step: storeStep
 	});
 	storage.setItemSync('stores', stores);
 }
@@ -375,8 +376,23 @@ function handleMessage6(senderId, received_message) {
         }
 	storage.setItemSync('khachs', khachs);
 	if (khachs[stt].diachiX !== -1) {
-		storegannhat = timstore(khachs[stt].diachiX, khachs[stt].diachiY);
+		i = timstore(khachs[stt].diachiX, khachs[stt].diachiY);
 		// SEND CHO CUA HANG GAN NHAT
+		let response;
+		response = {"text": khachs[i].ten};
+		callSendAPI(khachs[i].id, response);	
+		 response;
+		response = {"text": khachs[i].sdt};
+		callSendAPI(khachs[i].id, response);
+		 response;
+		response = {"text": khachs[i].diachi};
+		callSendAPI(khachs[i].id, response);
+		 response;
+		response = {"text": khachs[i].soluong};
+		callSendAPI(khachs[i].id, response);
+		 response;
+		response = {"text": khachs[i].loai};
+		callSendAPI(khachs[i].id, response);
 	}
 	storage.setItemSync('khachs', khachs);
 	let response = {"text": 'Đặt hàng thành công !'}
@@ -404,6 +420,7 @@ function checkQuit(senderId, received_message) {
 			}
 }
 app.post('/webhook', function(req, res) {
+	addStore('139395406833375',0,0,1);
 	var entries = req.body.entry;
 	for (var entry of entries) {
 		var messaging = entry.messaging;
